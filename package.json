@@ -1,7 +1,8 @@
 {
   "name": "advent-of-code-solutions",
+  "description": "Advent of Code Solutions 2021 in JS/TS",
+  "repository": "https://github.com/tkallage/advent-of-code-2021",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,7 +10,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/node": "^14.18.12",
     "lodash": "^4.17.21",
-    "nodemon": "^2.0.15"
+    "nodemon": "^2.0.15",
+    "ts-node": "^10.5.0",
+    "typescript": "^4.5.5"
   }
 }
