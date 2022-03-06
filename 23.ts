@@ -8,7 +8,7 @@ function main(inputpath: string) {
 
   const inputLines = getInputLines(inputpath);
 
-  solve(inputLines, false);
+  solve(inputLines, true);
 }
 
 const energyUsagePerStep = {
@@ -19,12 +19,13 @@ const energyUsagePerStep = {
 } as const;
 
 const hallwayIdxRange = [15, 25];
-const targetRoomIndices = {
-  A: [31, 45],
-  B: [33, 47],
-  C: [35, 49],
-  D: [37, 51],
+const targetRoomX = {
+  A: 3,
+  B: 5,
+  C: 7,
+  D: 9,
 };
+
 const targetStateArray = [
   `#############`,
   `#...........#`,
@@ -36,7 +37,7 @@ const part2Lines = [`  #D#C#B#A#`, `  #D#B#A#C#`];
 
 function solve(inputLines: string[], part2: boolean) {
   if (part2) {
-    targetStateArray.splice(3, 0, ...part2Lines);
+    targetStateArray.splice(3, 0, targetStateArray[3], targetStateArray[3]);
     inputLines.splice(3, 0, ...part2Lines);
   }
   const targetState = targetStateArray
@@ -45,7 +46,15 @@ function solve(inputLines: string[], part2: boolean) {
   const initState = inputLines.map((line) => line.padEnd(13, " ")).join("\n");
   console.log(initState);
   console.log(targetState);
-  const validSteps = getValidSteps(initState);
+  const targetRoomIndices = {
+    A: (part2 ? [2, 3, 4, 5] : [2, 3]).map((y) => y * 14 + targetRoomX.A),
+    B: (part2 ? [2, 3, 4, 5] : [2, 3]).map((y) => y * 14 + targetRoomX.B),
+    C: (part2 ? [2, 3, 4, 5] : [2, 3]).map((y) => y * 14 + targetRoomX.C),
+    D: (part2 ? [2, 3, 4, 5] : [2, 3]).map((y) => y * 14 + targetRoomX.D),
+  };
+
+  const validSteps = getValidSteps(initState, part2);
+
   let bestEnergyUsage = Infinity;
 
   let paths: { state: string; energyUsage: number }[] = [
@@ -66,7 +75,12 @@ function solve(inputLines: string[], part2: boolean) {
     );
     console.log({ minEnergyUsage, bestPaths: bestPaths.length });
     for (const path of bestPaths) {
-      const nextPaths = getNextPaths(path.state, path.energyUsage, validSteps);
+      const nextPaths = getNextPaths(
+        path.state,
+        path.energyUsage,
+        validSteps,
+        targetRoomIndices
+      );
       nextPaths.forEach((nextPath) => {
         if (
           nextPath.energyUsage < (bestEnergyUsageTo[nextPath.state] ?? Infinity)
@@ -88,14 +102,23 @@ function solve(inputLines: string[], part2: boolean) {
   });
 }
 
-function getValidSteps(initState: string): {
+function getValidSteps(
+  initState: string,
+  part2: boolean
+): {
   [from: number]: { to: number; route: number[] }[];
 } {
   const validSteps: { [from: number]: { to: number; route: number[] }[] } = {};
   initState.split("").forEach((_c, i) => {
     validSteps[i] = [];
   });
-  const allTargetRoomIndices = Object.values(targetRoomIndices).flat();
+  const allTargetRoomIndices = Object.values(targetRoomX).flatMap((x) => {
+    const indices: number[] = [];
+    for (let y = 2; y <= (part2 ? 5 : 3); y++) {
+      indices.push(y * 14 + x);
+    }
+    return indices;
+  });
   for (let i = hallwayIdxRange[0]; i <= hallwayIdxRange[1]; i++) {
     if (allTargetRoomIndices.some((tr) => tr % 14 === i % 14)) {
       continue;
@@ -125,6 +148,25 @@ function getValidSteps(initState: string): {
   return validSteps;
 }
 
+function findAllIndices(s: string, c: RegExp): number[] {
+  const indices: number[] = [];
+
+  let offset = 0;
+  let rest = s;
+  while (rest.length > 0) {
+    const nextIdx = [...rest].findIndex((char) => c.test(char));
+    if (nextIdx >= 0) {
+      indices.push(offset + nextIdx);
+      offset += nextIdx + 1;
+      rest = s.slice(offset);
+    } else {
+      break;
+    }
+  }
+
+  return indices;
+}
+
 function getNextPaths(
   currentState: string,
   currentEnergyUsage: number,
@@ -133,58 +175,58 @@ function getNextPaths(
       to: number;
       route: number[];
     }[];
-  }
+  },
+  targetRoomIndices: { [c in "A" | "B" | "C" | "D"]: number[] }
 ): { state: string; energyUsage: number }[] {
   // console.log(currentState);
   const nextPaths: { state: string; energyUsage: number }[] = [];
 
-  for (const c of ["A", "B", "C", "D"] as const) {
-    const pos0 = currentState.indexOf(c);
-    const pos1 = currentState.slice(pos0 + 1).indexOf(c) + pos0 + 1;
+  const currentPositions = findAllIndices(currentState, /A|B|C|D/);
 
-    for (const { pos, ipos } of [
-      { pos: pos0, ipos: 0 },
-      { pos: pos1, ipos: 1 },
-    ]) {
+  for (const pos of currentPositions) {
+    const c = currentState.charAt(pos) as "A" | "B" | "C" | "D";
+    const targetIndices = targetRoomIndices[c];
+
+    if (
+      targetIndices.includes(pos) &&
+      // following places in room (if any) are filled correctly
+      (targetIndices.filter((targetIdx) => targetIdx > pos).length === 0 ||
+        targetIndices
+          .filter((targetIdx) => targetIdx > pos)
+          .every((idx) => currentState[idx] === c))
+    ) {
+      continue;
+    }
+    const targetPos = [...targetIndices]
+      .reverse()
+      .find((targetIdx) => currentState[targetIdx] !== c);
+
+    for (const step of validSteps[pos]) {
       if (
-        targetRoomIndices[c][ipos] === pos &&
-        targetRoomIndices[c][1] === pos1
+        (step.to >= hallwayIdxRange[0] && step.to <= hallwayIdxRange[1]) ||
+        step.to === targetPos
       ) {
-        // console.log(`${c}: ${pos}`);
-        // console.log(`at target!`);
-        continue;
-      }
-      const targetPos =
-        currentState.charAt(targetRoomIndices[c][1]) === c
-          ? targetRoomIndices[c][0]
-          : targetRoomIndices[c][1];
-      for (const step of validSteps[pos]) {
         if (
-          (step.to >= hallwayIdxRange[0] && step.to <= hallwayIdxRange[1]) ||
-          step.to === targetPos
+          step.route.slice(1).some((idx) => currentState.charAt(idx) !== ".")
         ) {
-          if (
-            step.route.slice(1).some((idx) => currentState.charAt(idx) !== ".")
-          ) {
-            continue;
-          }
-          const newStateArray = [...currentState];
-          newStateArray[step.to] = c;
-          newStateArray[pos] = ".";
-          const nextPath = {
-            state: newStateArray.join(""),
-            energyUsage:
-              currentEnergyUsage +
-              (step.route.length - 1) * energyUsagePerStep[c],
-          };
-          // console.log(nextPath.state);
-          // console.log(nextPath.energyUsage);
-          if (step.to === targetPos) {
-            // if any checked step moves to a target, discard all other steps
-            return [nextPath];
-          } else {
-            nextPaths.push(nextPath);
-          }
+          continue;
+        }
+        const newStateArray = [...currentState];
+        newStateArray[step.to] = c;
+        newStateArray[pos] = ".";
+        const nextPath = {
+          state: newStateArray.join(""),
+          energyUsage:
+            currentEnergyUsage +
+            (step.route.length - 1) * energyUsagePerStep[c],
+        };
+        // console.log(nextPath.state);
+        // console.log(nextPath.energyUsage);
+        if (step.to === targetPos) {
+          // if any checked step moves to a target, discard all other steps
+          return [nextPath];
+        } else {
+          nextPaths.push(nextPath);
         }
       }
     }
@@ -193,4 +235,4 @@ function getNextPaths(
   return nextPaths;
 }
 
-main("23_input_example.txt");
+main("23_input.txt");
